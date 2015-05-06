@@ -62,7 +62,7 @@ void MainWindow::showNoMasterMessage() {
 	QMessageBox msgBox;
 	msgBox.setText("Couldn't find the ros master.");
 	msgBox.exec();
-    close();
+    closeEvent(0);
 }
 
 /*
@@ -77,7 +77,7 @@ void MainWindow::showNoMasterMessage() {
 void MainWindow::updateUserView() {
     // image must be copied since it uses the conversion_mat_ for storage which is asynchronously overwritten in the next callback invocation
 
-    QImage image( qnode.conversion_mat_.data, qnode.conversion_mat_.cols, qnode.conversion_mat_.rows, qnode.conversion_mat_.step[0], QImage::Format_RGB888);
+    QImage image( qnode.user_image_.data, qnode.user_image_.cols, qnode.user_image_.rows, qnode.user_image_.step[0], QImage::Format_RGB888);
 
     // reset image on topic change
     ui.image_frame->setImage(image);

@@ -5,14 +5,26 @@
 cmake_minimum_required(VERSION 2.8.0)
 project(ranger_librarian_gui)
 
+list( APPEND CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS} -g -ftest-coverage -fprofile-arcs")
 
-find_package(OpenCV REQUIRED)
 find_package(Qt4 COMPONENTS QtCore QtGui REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(Boost REQUIRED regex)
+
+# Find tesseract
+find_path(Tesseract_INCLUDE_DIR tesseract/baseapi.h
+  HINTS
+  /usr/include
+  /usr/local/include)
+
+find_library(Tesseract_LIBRARIES NAMES tesseract_full tesseract_api tesseract
+  HINTS
+  /usr/lib
+  /usr/local/lib)
 
 ##############################################################################
 # Catkin
 ##############################################################################
-
 
 
 # qt_build provides the qt cmake glue, roscpp the comms for a default talker
@@ -22,8 +34,10 @@ find_package(catkin REQUIRED COMPONENTS
         rospy
         std_msgs
         sensor_msgs
+        ranger_librarian
         image_transport
-        cv_bridge)
+        cv_bridge
+)
 
 
 include_directories(${catkin_INCLUDE_DIRS})
@@ -72,6 +86,8 @@ include_directories(
 ##############################################################################
 
 add_executable(ranger_librarian_gui ${QT_SOURCES} ${QT_RESOURCES_CPP} ${QT_FORMS_HPP} ${QT_MOC_HPP})
-target_link_libraries(ranger_librarian_gui ${QT_LIBRARIES} ${catkin_LIBRARIES})
-install(TARGETS ranger_librarian_gui RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+target_link_libraries(ranger_librarian_gui ${QT_LIBRARIES} ${catkin_LIBRARIES} ${Tesseract_LIBRARIES})
+install(
+    TARGETS ranger_librarian_gui
+    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
