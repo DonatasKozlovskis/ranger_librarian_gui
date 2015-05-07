@@ -10,6 +10,9 @@
 
 #include <sstream>
 #include "../include/ranger_librarian_gui/qnode.hpp"
+#include <ctime>
+#include <iomanip>
+
 /*****************************************************************************
 ** Namespaces
 *****************************************************************************/
@@ -24,7 +27,10 @@ QNode::QNode(int argc, char** argv ) :
 	init_argc(argc),
     init_argv(argv),
     read_label_(false), read_label_success_(false), weight_max_reached_(false),
-    lr_(OCR_FRAME_SKIP, QUEUE_MAX_LENGTH, QUEUE_ACCEPT_RATE)
+    lr_(OCR_FRAME_SKIP, QUEUE_MAX_LENGTH, QUEUE_ACCEPT_RATE),
+    q_user_image_(QImage()),
+    action_last_(NAVIGATOR_STOP),
+    action_current_(NAVIGATOR_MOVE)
     {}
 
 QNode::~QNode() {
@@ -69,7 +75,6 @@ bool QNode::init() {
     // Subscribers
     sub_rgb_    = it_->subscribe("/usb_cam/image_raw", 1, &QNode::rgb_callback, this);
 
-    sub_depth_low_duration_  = nh_->subscribe<const std_msgs::Float64&>(depth_low_duration, 1, &QNode::depth_low_duration_callback, this);
     sub_depth_low_action_  =   nh_->subscribe<const std_msgs::String&>(depth_low_action, 1, &QNode::depth_low_action_callback, this);
 
     sub_scale_  =           nh_->subscribe<const std_msgs::Float64&>(scale_topic, 1, &QNode::scale_callback, this);
@@ -88,63 +93,37 @@ bool QNode::init() {
 }
 
 void QNode::run() {
-    ros::Rate loop_rate(31);
-	int count = 0;
 
-	while ( ros::ok() ) {
+    log("Run started move.");
 
-		std_msgs::String msg;
-		std::stringstream ss;
-		ss << "hello world " << count;
-		msg.data = ss.str();
-		chatter_publisher.publish(msg);
-//    	log(Info,std::string("I sent: ")+msg.data);
+    //the same as ros::spin();
+    while (ros::ok()) {
+        ros::getGlobalCallbackQueue()->callAvailable(ros::WallDuration(0.1));
+    }
 
-		ros::spinOnce();
-		loop_rate.sleep();
-		++count;
-	}
 	std::cout << "Ros shutdown, proceeding to close the gui." << std::endl;
 	Q_EMIT rosShutdown(); // used to signal the gui for a shutdown (useful to roslaunch)
 }
 
+void QNode::log(const std::string &msg) {
 
-void QNode::log( const LogLevel &level, const std::string &msg) {
-	logging_model.insertRows(logging_model.rowCount(),1);
-	std::stringstream logging_model_msg;
-	switch ( level ) {
-		case(Debug) : {
-				ROS_DEBUG_STREAM(msg);
-				logging_model_msg << "[DEBUG] [" << ros::Time::now() << "]: " << msg;
-				break;
-		}
-		case(Info) : {
-				ROS_INFO_STREAM(msg);
-				logging_model_msg << "[INFO] [" << ros::Time::now() << "]: " << msg;
-				break;
-		}
-		case(Warn) : {
-				ROS_WARN_STREAM(msg);
-				logging_model_msg << "[INFO] [" << ros::Time::now() << "]: " << msg;
-				break;
-		}
-		case(Error) : {
-				ROS_ERROR_STREAM(msg);
-				logging_model_msg << "[ERROR] [" << ros::Time::now() << "]: " << msg;
-				break;
-		}
-		case(Fatal) : {
-				ROS_FATAL_STREAM(msg);
-				logging_model_msg << "[FATAL] [" << ros::Time::now() << "]: " << msg;
-				break;
-		}
-	}
-	QVariant new_row(QString(logging_model_msg.str().c_str()));
-	logging_model.setData(logging_model.index(logging_model.rowCount()-1),new_row);
-	Q_EMIT loggingUpdated(); // used to readjust the scrollbar
+    logging_model.insertRows(0,1);
+    std::stringstream msg_timestamped;
+
+    std::time_t rawtime = std::time(nullptr);
+    char buffer [9];
+    std::strftime (buffer,9,"%T",localtime (&rawtime));
+
+    msg_timestamped <<  "[" << string(buffer)  << "]: " << msg;
+    QVariant new_row(QString(msg_timestamped.str().c_str()));
+
+    logging_model.setData(logging_model.index(0),new_row);
+
+    Q_EMIT navigatorActionStringUpdated(); // used to signal the gui for a string change
 }
 
 
+/// CALLBACKS
 void QNode::rgb_callback(const sensor_msgs::ImageConstPtr &msg)
 {
     if (DEBUG) {
@@ -153,9 +132,8 @@ void QNode::rgb_callback(const sensor_msgs::ImageConstPtr &msg)
 
     try
     {
-        // First let cv_bridge do its magic
+        // cv_bridge magic
         cv_ptr_ = cv_bridge::toCvShare(msg, sensor_msgs::image_encodings::RGB8);
-
 
         // process frame with orc if needed
         read_label_success_ = lr_.processFrame(cv_ptr_->image);
@@ -163,35 +141,20 @@ void QNode::rgb_callback(const sensor_msgs::ImageConstPtr &msg)
         // image must be copied since it uses the cv_ptr->image for storage which is asynchronously overwritten in the next callback invocation
         user_image_ = cv_ptr_->image.clone();
 
-        // prepare user output image view
+        // prepare label reader user output image view
         lr_.prepareUserImage(user_image_);
 
-        Q_EMIT rgbImageUpdated();
+        q_user_image_ = QImage( user_image_.data, user_image_.cols, user_image_.rows, user_image_.step[0], QImage::Format_RGB888);
+
+        Q_EMIT userImageUpdated();
     }
     catch (cv_bridge::Exception& e)
     {
         printf("cv_bridge exception: %s", e.what());
         return;
     }
-
-
 }
 
-
-void QNode::depth_low_duration_callback(const std_msgs::Float64& msg) {
-    // UNUSED
-//    if (DEBUG) {
-//        printf("depth_below_duration msg received:  %0.2f\n", msg.data);
-//    }
-
-//    double depth_below_duration = msg.data;
-
-//    if (depth_below_duration > time_depth_low_read_) {
-//        read_label_ = true;
-//    } else {
-//        read_label_ = false;
-//    }
-}
 
 void QNode::depth_low_action_callback(const std_msgs::String& msg) {
 
@@ -201,48 +164,49 @@ void QNode::depth_low_action_callback(const std_msgs::String& msg) {
         printf("depth_low_action msg received:  %s\n", depth_low_action.c_str());
     }
 
-    if (depth_low_action.compare("stop")!=0 ) {
-        read_label_ = false;
-    } else {
+    if (!read_label_ && depth_low_action.compare("stop")==0 ) {
+
         read_label_ = true;
-    }
 
-    if (read_label_) {
-        std::cout <<  "trying to read label " << std::endl;
+        action_current_ = NAVIGATOR_STOP;
+        log("Trying to read label...");
         //wait for book label
-//        if (book_read_label()) {
+        if (book_read_label()) {
 
-//            std::cout <<  "read label success! waiting for book " << std::endl;
+            log("Read label success! Waiting for book...");
 
-//            if (book_read_weight()) {
-//                std::cout <<  "book add success! " << std::endl;
-//            } else {
-//                std::cout <<  "book add failed! " << std::endl;
-//            }
+            if (book_read_weight()) {
+                log("Book added successfully!");
+            } else {
+                log("Book not added! Timeout...");
+            }
 
-//        } else {
-//             std::cout <<  "read label failed, timeout " << std::endl;
-
-//        }
+        } else {
+            log("Read label failed! Timeout...");
+        }
         read_label_ = false;
-        std::cout << "move around" << std::endl;
+        action_current_ = NAVIGATOR_MOVE;
+
     }
+
 }
 
 void QNode::scale_callback(const std_msgs::Float64& msg) {
 
-//    double weight_current = msg.data;
+    double weight_current = msg.data;
 
-//    if (DEBUG) {
-//        printf("Scale msg received:  %0.2f\n", weight_current);
-//    }
+    if (DEBUG) {
+        printf("Scale msg received:  %0.2f\n", weight_current);
+    }
 
-//    if (weight_current > weight_max_allowed_) {
-//        weight_max_reached_ = true;
-//    } else {
-//        weight_max_reached_ = false;
-//    }
-//    // implement control of max weight reached
+    if (! weight_max_reached_ && weight_current > weight_max_allowed_) {
+        weight_max_reached_ = true;
+        log("MAX WEIGHT reached! ");
+        action_current_ = NAVIGATOR_FINISH;
+    } else {
+        weight_max_reached_ = false;
+    }
+    // implement control of max weight reached
 }
 
 void QNode::scale_filtered_callback(const ranger_librarian::WeightFiltered& msg) {
@@ -255,19 +219,75 @@ void QNode::scale_filtered_callback(const ranger_librarian::WeightFiltered& msg)
         printf("scale_filtered_callback msg received:  %0.3f\n", weight_stable);
     }
 
-//    if (weight_changed) {
-//        if (weight_change > 0) {
-//            last_book_add_time_ = msg.change_time;
-//            std::cout << "book added" << std::endl;
-//        } else {
-//            std::cout << "book removed" << std::endl;
-//        }
-//    } else {
-//        // no change
-//    }
+    if (weight_changed) {
+        if (weight_change > 0) {
+            last_book_add_time_ = msg.change_time;
+            string logstring = "Book added: \n" + last_book_add_.author + ", " + last_book_add_.callNumber;
+            log(logstring);
+        } else {
+            log("Book removed");
+        }
+    } else {
+        // no change
+    }
 
 }
+/////////////////////////////////////////////////////////////////////
+// OTHER methods
+bool QNode::book_read_label() {
 
+    read_label_success_ = false;
+    bool read_success = false;
+
+    ros::Time start_time = ros::Time::now();
+    ros::Time run_time = ros::Time::now();
+
+    lr_.reset();
+    lr_.readLabel(true);
+
+    while (!read_success && (run_time-start_time < ros::Duration(time_wait_read_label_)) && ros::ok() ) {
+
+        read_success = read_label_success_;
+
+        ros::getGlobalCallbackQueue()->callAvailable(ros::WallDuration(0.1));
+        run_time = ros::Time::now();
+    }
+
+    if (read_success){
+        //update last book values
+        last_book_add_time_ = ros::Time::now();
+        last_book_add_.author = lr_.getAuthor();
+        last_book_add_.callNumber = lr_.getCallNumber();
+        last_book_add_.weight = 0;
+    } else {
+        last_book_add_time_ = ros::Time(0);
+        last_book_add_.weight = 0;
+        last_book_add_.author = "";
+        last_book_add_.callNumber = "";
+    }
+
+    return read_success;
+}
+
+bool QNode::book_read_weight() {
+
+    bool book_added = false;
+
+    ros::Time start_time = ros::Time::now();
+    ros::Time run_time = ros::Time::now();
+
+    while (!book_added && (run_time-start_time < ros::Duration(time_wait_read_label_)) && ros::ok() ) {
+
+        if (last_book_add_time_ > start_time ) {
+            book_added = true;
+        }
+
+        ros::getGlobalCallbackQueue()->callAvailable(ros::WallDuration(0.1));
+        run_time = ros::Time::now();
+    }
+
+    return book_added;
+}
 
 
 

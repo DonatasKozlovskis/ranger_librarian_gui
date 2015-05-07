@@ -38,12 +38,15 @@
 #include <QThread>
 #include <QStringListModel>
 
+#include "utils.hpp"
+
+
 #include "label_reader.hpp"
 
 using std::string;
 
 /**@brief Flag for printing debug messages.*/
-bool const DEBUG = true;
+static const bool DEBUG = false;
 
 /**@brief Default rosparam server values.*/
 static const std::string RGB_IMAGE_TOPIC = "/usb_cam/image_raw";
@@ -59,6 +62,8 @@ static const int NODE_RATE = 31;
 static const int OCR_FRAME_SKIP = 5;        // parameter to process each xx frame with OCR
 static const int QUEUE_MAX_LENGTH = 10;     // how many historical values to keep in queue
 static const double QUEUE_ACCEPT_RATE = 0.7;// last repeated element acceptance rate
+
+#include <QtGui>
 
 
 
@@ -80,24 +85,18 @@ public:
     bool init();
     void run();
 
-    /*********************
-    ** Logging
-    **********************/
-    enum LogLevel {
-             Debug,
-             Info,
-             Warn,
-             Error,
-             Fatal
-     };
-
+    // Logging
     QStringListModel* loggingModel() { return &logging_model; }
-    void log( const LogLevel &level, const std::string &msg);
+    string navigatorActionString() { return NavigatorActionStrings[action_current_]; }
+    void log( const std::string &msg);
 
 Q_SIGNALS:
     void loggingUpdated();
     void rosShutdown();
-    void rgbImageUpdated();
+
+    void userImageUpdated();
+    void navigatorActionStringUpdated();
+
 
 private:
     int init_argc;
@@ -108,9 +107,6 @@ private:
     // Node
     ros::NodeHandle* nh_;
     image_transport::ImageTransport* it_;
-
-    // Node loop rate
-//    ros::Rate nh_rate_;
 
     // Publishers
     ros::Publisher pub_user_rgb_;
@@ -136,24 +132,37 @@ private:
 
     // pointer to obtained cv image
     cv_bridge::CvImageConstPtr cv_ptr_;
+    cv::Mat user_image_;                    // cloned cv image
 
     // control boolean variables
     bool read_label_;
     bool read_label_success_;
     bool weight_max_reached_;
 
+    // book struct object
+    Book last_book_add_;
+    ros::Time last_book_add_time_;
+
+    NavigatorAction action_last_;
+    NavigatorAction action_current_;
+
+    // list of books
+    std::vector<Book> book_list_;
+
+    // methods
+    bool book_read_label();
+    bool book_read_weight();
 
 public:
     // Callbacks
     void rgb_callback(const sensor_msgs::ImageConstPtr& msg);
 
-    void depth_low_duration_callback(const std_msgs::Float64& msg);
     void depth_low_action_callback(const std_msgs::String& msg);
     void scale_callback(const std_msgs::Float64& msg);
     void scale_filtered_callback(const ranger_librarian::WeightFiltered& msg);
 
-    cv::Mat user_image_;
 
+    QImage q_user_image_;
 };
 
 }  // namespace ranger_librarian_gui

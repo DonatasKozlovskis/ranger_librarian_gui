@@ -32,24 +32,29 @@ class MainWindow : public QMainWindow {
 Q_OBJECT
 
 public:
-	MainWindow(int argc, char** argv, QWidget *parent = 0);
-	~MainWindow();
+    MainWindow(int argc, char** argv, QWidget *parent = 0);
+    ~MainWindow();
 
-	void closeEvent(QCloseEvent *event); // Overloaded function
-	void showNoMasterMessage();
+    void closeEvent(QCloseEvent *event); // Overloaded function
+    void showNoMasterMessage();
+
 
 public Q_SLOTS:
     /******************************************
     ** Auto-connections (connectSlotsByName())
     *******************************************/
-//    void on_button_connect_clicked(bool check );
+    void on_button_confirm_clicked(bool check );
+    void on_button_reject_clicked(bool check );
 
 
+    /******************************************
+    ** Manual connections
+    *******************************************/
     void updateUserView();
-
+    void updateNavigatorActionString();
 private:
-	Ui::MainWindowDesign ui;
-	QNode qnode;
+    Ui::MainWindowDesign ui;
+    QNode qnode;
 };
 
 }  // namespace ranger_librarian_gui

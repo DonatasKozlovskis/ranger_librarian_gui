@@ -29,12 +29,14 @@ MainWindow::MainWindow(int argc, char** argv, QWidget *parent)
 {
     ui.setupUi(this); // Calling this incidentally connects all ui's triggers to on_...() callbacks in this class.
 
-    // reset image on topic change
+    ui.view_logging->setModel(qnode.loggingModel());
+    // reset image
     ui.image_frame->setImage(QImage());
 
 	setWindowIcon(QIcon(":/images/icon.png"));
     QObject::connect(&qnode, SIGNAL(rosShutdown()), this, SLOT(close()));
-    QObject::connect(&qnode, SIGNAL(rgbImageUpdated()), this, SLOT(updateUserView()));
+    QObject::connect(&qnode, SIGNAL(userImageUpdated()), this, SLOT(updateUserView()));
+    QObject::connect(&qnode, SIGNAL(navigatorActionStringUpdated()), this, SLOT(updateNavigatorActionString()));
 
 	/*********************
 	** Logging
@@ -70,21 +72,23 @@ void MainWindow::showNoMasterMessage() {
  * is already checked or not.
  */
 
-//void MainWindow::on_button_connect_clicked(bool check ) {
-
-//}
-
-void MainWindow::updateUserView() {
-    // image must be copied since it uses the conversion_mat_ for storage which is asynchronously overwritten in the next callback invocation
-
-    QImage image( qnode.user_image_.data, qnode.user_image_.cols, qnode.user_image_.rows, qnode.user_image_.step[0], QImage::Format_RGB888);
-
-    // reset image on topic change
-    ui.image_frame->setImage(image);
-
-//    cv::waitKey(3);
+void MainWindow::on_button_confirm_clicked(bool check ) {
 
 }
+
+void MainWindow::on_button_reject_clicked(bool check ) {
+
+}
+
+void MainWindow::updateUserView() {
+    ui.image_frame->setImage(qnode.q_user_image_);
+}
+
+void MainWindow::updateNavigatorActionString() {
+    ui.label_navigator->setText(QString(qnode.navigatorActionString().c_str()));
+}
+
+
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {

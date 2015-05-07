@@ -1,3 +1,12 @@
+# Backup files created by gedit
+*.*~
+
+# Qt Creator's created file
+CMakeLists.txt.user
+
+#build folder
+build/
+
 # Compiled Object files
 *.slo
 *.lo
