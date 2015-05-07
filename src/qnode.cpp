@@ -26,7 +26,7 @@ namespace ranger_librarian_gui {
 QNode::QNode(int argc, char** argv ) :
 	init_argc(argc),
     init_argv(argv),
-    read_label_(false), read_label_success_(false), weight_max_reached_(false),
+    read_label_(false), read_label_success_(false), weight_max_reached_(false), battery_low_(false),
     lr_(OCR_FRAME_SKIP, QUEUE_MAX_LENGTH, QUEUE_ACCEPT_RATE),
     q_user_image_(QImage()),
     action_last_(NAVIGATOR_STOP),
@@ -81,6 +81,7 @@ bool QNode::init() {
     sub_scale_filtered_  =  nh_->subscribe<const ranger_librarian::WeightFiltered&>(scale_filtered_topic, 1, &QNode::scale_filtered_callback, this);
 
     // get the rest of paramters
+    nh_->param("weight_empty",       weight_empty_,              double(0.2));
     nh_->param("weight_max_allowed", weight_max_allowed_,        double(5));
     nh_->param("time_depth_low_read", time_depth_low_read_,      double(1.5));
     nh_->param("time_wait_read_label", time_wait_read_label_,    double(6));
@@ -100,7 +101,6 @@ void QNode::run() {
     while (ros::ok()) {
         ros::getGlobalCallbackQueue()->callAvailable(ros::WallDuration(0.1));
     }
-
 	std::cout << "Ros shutdown, proceeding to close the gui." << std::endl;
 	Q_EMIT rosShutdown(); // used to signal the gui for a shutdown (useful to roslaunch)
 }
@@ -157,20 +157,25 @@ void QNode::rgb_callback(const sensor_msgs::ImageConstPtr &msg)
 
 
 void QNode::depth_low_action_callback(const std_msgs::String& msg) {
+    if (DEBUG) {
+        printf("depth_low_action msg received:  %s\n", msg.data.c_str());
+    }
+
+    // check conditions to skip callback
+    if (read_label_ || weight_max_reached_) {
+        return;
+    }
 
     string depth_low_action = msg.data;
 
-    if (DEBUG) {
-        printf("depth_low_action msg received:  %s\n", depth_low_action.c_str());
-    }
-
-    if (!read_label_ && depth_low_action.compare("stop")==0 ) {
+    if ( depth_low_action.compare("stop")==0 ) {
 
         read_label_ = true;
 
         action_current_ = NAVIGATOR_STOP;
+
         log("Trying to read label...");
-        //wait for book label
+
         if (book_read_label()) {
 
             log("Read label success! Waiting for book...");
@@ -180,13 +185,11 @@ void QNode::depth_low_action_callback(const std_msgs::String& msg) {
             } else {
                 log("Book not added! Timeout...");
             }
-
         } else {
             log("Read label failed! Timeout...");
         }
         read_label_ = false;
         action_current_ = NAVIGATOR_MOVE;
-
     }
 
 }
@@ -199,17 +202,29 @@ void QNode::scale_callback(const std_msgs::Float64& msg) {
         printf("Scale msg received:  %0.2f\n", weight_current);
     }
 
-    if (! weight_max_reached_ && weight_current > weight_max_allowed_) {
-        weight_max_reached_ = true;
-        log("MAX WEIGHT reached! ");
-        action_current_ = NAVIGATOR_FINISH;
-    } else {
-        weight_max_reached_ = false;
+    if (!weight_max_reached_ ) {
+        if (weight_current > weight_max_allowed_) {
+            weight_max_reached_ = true;
+            log("MAX WEIGHT reached! ");
+            action_current_ = NAVIGATOR_FINISH;
+        }
+
     }
+
     // implement control of max weight reached
+    if (weight_max_reached_) {
+        if( weight_current <= weight_empty_) {
+            weight_max_reached_ = false;
+            log("Disloaded! ");
+            action_current_ = NAVIGATOR_MOVE;
+        }
+    }
 }
 
+
+
 void QNode::scale_filtered_callback(const ranger_librarian::WeightFiltered& msg) {
+
 
     double weight_stable = msg.weight_stable;
     double weight_change = msg.weight_change;
@@ -288,6 +303,7 @@ bool QNode::book_read_weight() {
 
     return book_added;
 }
+
 
 
 

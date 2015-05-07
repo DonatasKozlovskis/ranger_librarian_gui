@@ -121,6 +121,7 @@ private:
 
     //  scale callback
     double weight_max_allowed_;             // maximum weight allowed
+    double weight_empty_;                   // weight measurement as empty;
 
     // read label parameters
     double time_depth_low_read_;            // time (s) for depth val = 0 to start label read
@@ -138,6 +139,7 @@ private:
     bool read_label_;
     bool read_label_success_;
     bool weight_max_reached_;
+    bool battery_low_;
 
     // book struct object
     Book last_book_add_;
@@ -160,7 +162,6 @@ public:
     void depth_low_action_callback(const std_msgs::String& msg);
     void scale_callback(const std_msgs::Float64& msg);
     void scale_filtered_callback(const ranger_librarian::WeightFiltered& msg);
-
 
     QImage q_user_image_;
 };

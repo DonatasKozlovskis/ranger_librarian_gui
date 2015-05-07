@@ -18,7 +18,8 @@ struct Book {
 {
     NAVIGATOR_STOP,
     NAVIGATOR_MOVE,
-    NAVIGATOR_FINISH
+    NAVIGATOR_FINISH,
+    NAVIGATOR_BATTERYLOW
 };
 static const string NavigatorActionStrings[] =
 {
