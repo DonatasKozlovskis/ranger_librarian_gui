@@ -71,7 +71,9 @@ bool QNode::init() {
 
 
 	// Add your ros communications here.
-    chatter_publisher = nh_->advertise<std_msgs::String>("chatter", 1000);
+    pub_navigator_ = nh_->advertise<ranger_librarian::NavigatorAction>("navigator_action", 10);
+
+
     // Subscribers
     sub_rgb_    = it_->subscribe("/usb_cam/image_raw", 1, &QNode::rgb_callback, this);
 
@@ -95,7 +97,8 @@ bool QNode::init() {
 
 void QNode::run() {
 
-    log("Run started move.");
+    log("Starting moving around");
+    update_navigator_action_(NAVIGATOR_MOVE);
 
     //the same as ros::spin();
     while (ros::ok()) {
@@ -119,7 +122,6 @@ void QNode::log(const std::string &msg) {
 
     logging_model.setData(logging_model.index(0),new_row);
 
-    Q_EMIT navigatorActionStringUpdated(); // used to signal the gui for a string change
 }
 
 
@@ -171,9 +173,7 @@ void QNode::depth_low_action_callback(const std_msgs::String& msg) {
     if ( depth_low_action.compare("stop")==0 ) {
 
         read_label_ = true;
-
-        action_current_ = NAVIGATOR_STOP;
-
+        update_navigator_action_(NAVIGATOR_STOP);
         log("Trying to read label...");
 
         if (book_read_label()) {
@@ -189,7 +189,7 @@ void QNode::depth_low_action_callback(const std_msgs::String& msg) {
             log("Read label failed! Timeout...");
         }
         read_label_ = false;
-        action_current_ = NAVIGATOR_MOVE;
+        update_navigator_action_(NAVIGATOR_MOVE);
     }
 
 }
@@ -206,7 +206,7 @@ void QNode::scale_callback(const std_msgs::Float64& msg) {
         if (weight_current > weight_max_allowed_) {
             weight_max_reached_ = true;
             log("MAX WEIGHT reached! ");
-            action_current_ = NAVIGATOR_FINISH;
+            update_navigator_action_(NAVIGATOR_FINISH);
         }
 
     }
@@ -216,7 +216,7 @@ void QNode::scale_callback(const std_msgs::Float64& msg) {
         if( weight_current <= weight_empty_) {
             weight_max_reached_ = false;
             log("Disloaded! ");
-            action_current_ = NAVIGATOR_MOVE;
+            update_navigator_action_(NAVIGATOR_MOVE);
         }
     }
 }
@@ -304,7 +304,15 @@ bool QNode::book_read_weight() {
     return book_added;
 }
 
+void QNode::update_navigator_action_(NavigatorAction action) {
+    action_current_ = action;
 
+    ranger_librarian::NavigatorAction msg;
+    msg.action = action_current_;
+    pub_navigator_.publish(msg);
+
+    Q_EMIT navigatorActionStringUpdated(); // used to signal the gui for a string change
+}
 
 
 }  // namespace ranger_librarian_gui

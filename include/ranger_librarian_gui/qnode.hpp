@@ -21,9 +21,10 @@
 // ROS messages
 #include <sensor_msgs/image_encodings.h>
 #include <std_msgs/Float64.h>
+#include <std_msgs/UInt8.h>
 #include <std_msgs/String.h>
 #include <ranger_librarian/WeightFiltered.h>
-
+#include <ranger_librarian/NavigatorAction.h>
 //CV bridge
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
@@ -101,7 +102,6 @@ Q_SIGNALS:
 private:
     int init_argc;
     char** init_argv;
-    ros::Publisher chatter_publisher;
     QStringListModel logging_model;
 
     // Node
@@ -109,7 +109,7 @@ private:
     image_transport::ImageTransport* it_;
 
     // Publishers
-    ros::Publisher pub_user_rgb_;
+    ros::Publisher pub_navigator_;
 
     // Subscribers
     image_transport::Subscriber sub_rgb_;
@@ -154,6 +154,7 @@ private:
     // methods
     bool book_read_label();
     bool book_read_weight();
+    void update_navigator_action_(NavigatorAction action);
 
 public:
     // Callbacks
