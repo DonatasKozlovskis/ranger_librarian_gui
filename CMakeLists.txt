@@ -70,8 +70,13 @@ QT4_WRAP_CPP(QT_MOC_HPP ${QT_MOC})
 # Sources
 ##############################################################################
 
-file(GLOB_RECURSE QT_SOURCES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} FOLLOW_SYMLINKS src/*.cpp)
-
+file(GLOB_RECURSE QT_SOURCES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+FOLLOW_SYMLINKS src/main.cpp
+                src/main_window.cpp
+                src/qnode.cpp
+                src/label_reader.cpp
+                src/ratio_layouted_frame.cpp
+                src/utils.cpp)
 
 ## Specify additional locations of header files
 include_directories(
@@ -87,6 +92,14 @@ include_directories(
 
 add_executable(ranger_librarian_gui ${QT_SOURCES} ${QT_RESOURCES_CPP} ${QT_FORMS_HPP} ${QT_MOC_HPP})
 target_link_libraries(ranger_librarian_gui ${QT_LIBRARIES} ${catkin_LIBRARIES} ${Tesseract_LIBRARIES})
+
+#add_executable( depth_below_timer src/depth_below_timer.cpp src/utils.cpp)
+#target_link_libraries( depth_below_timer ${catkin_LIBRARIES} )
+
+#add_executable( weight_change_monitor src/weight_change_monitor.cpp)
+#target_link_libraries( weight_change_monitor ${catkin_LIBRARIES} )
+
+
 install(
     TARGETS ranger_librarian_gui
     RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
