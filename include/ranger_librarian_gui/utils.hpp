@@ -29,7 +29,7 @@ static const string NavigatorActionStrings[] =
 };
 
 // navigator ACTIONS
-enum DepthLowCommand
+enum DepthLowAction
 {
     DEPTH_LOW_SLOW,
     DEPTH_LOW_STOP,

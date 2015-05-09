@@ -26,11 +26,10 @@ namespace ranger_librarian_gui {
 QNode::QNode(int argc, char** argv ) :
 	init_argc(argc),
     init_argv(argv),
-    read_label_(false), read_label_success_(false), weight_max_reached_(false), battery_low_(false),
+    read_label_(false), read_label_success_(false), weight_max_reached_(false), battery_low_reached_(false),
     lr_(OCR_FRAME_SKIP, QUEUE_MAX_LENGTH, QUEUE_ACCEPT_RATE),
     q_user_image_(QImage()),
-    action_last_(NAVIGATOR_STOP),
-    action_current_(NAVIGATOR_MOVE)
+    action_msg_last_(), action_msg_current_()
     {}
 
 QNode::~QNode() {
@@ -58,6 +57,7 @@ bool QNode::init() {
     string depth_low_action;
     string scale_topic;
     string scale_filtered_topic;
+    string battery_level_topic;
 
     // get parameters for subscribers, if not use defaults
     nh_->param<string>("rgb_image", rgb_image_topic, RGB_IMAGE_TOPIC);
@@ -67,20 +67,18 @@ bool QNode::init() {
     nh_->param<string>("scale", scale_topic, SCALE_TOPIC);
     nh_->param<string>("scale_filtered", scale_filtered_topic, SCALE_FILTERED_TOPIC);
 
-
-
+    nh_->param<string>("battery_level_topic", battery_level_topic, BATTERY_LEVEL_TOPIC);
 
 	// Add your ros communications here.
     pub_navigator_ = nh_->advertise<ranger_librarian::NavigatorAction>("navigator_action", 10);
 
 
     // Subscribers
-    sub_rgb_    = it_->subscribe("/usb_cam/image_raw", 1, &QNode::rgb_callback, this);
-
-    sub_depth_low_action_  =   nh_->subscribe<const std_msgs::String&>(depth_low_action, 1, &QNode::depth_low_action_callback, this);
-
+    sub_rgb_ =              it_->subscribe("/usb_cam/image_raw", 1, &QNode::rgb_callback, this);
+    sub_depth_low_action_ = nh_->subscribe<const std_msgs::String&>(depth_low_action, 1, &QNode::depth_low_action_callback, this);
     sub_scale_  =           nh_->subscribe<const std_msgs::Float64&>(scale_topic, 1, &QNode::scale_callback, this);
-    sub_scale_filtered_  =  nh_->subscribe<const ranger_librarian::WeightFiltered&>(scale_filtered_topic, 1, &QNode::scale_filtered_callback, this);
+    sub_scale_filtered_ =   nh_->subscribe<const ranger_librarian::WeightFiltered&>(scale_filtered_topic, 1, &QNode::scale_filtered_callback, this);
+    sub_battery_ =          nh_->subscribe<const std_msgs::Float64&>(battery_level_topic, 1, &QNode::battery_level_callback, this);
 
     // get the rest of paramters
     nh_->param("weight_empty",       weight_empty_,              double(0.2));
@@ -88,6 +86,8 @@ bool QNode::init() {
     nh_->param("time_depth_low_read", time_depth_low_read_,      double(1.5));
     nh_->param("time_wait_read_label", time_wait_read_label_,    double(6));
     nh_->param("time_wait_add_book", time_wait_add_book_,        double(8));
+    nh_->param("battery_level_low",  battery_level_min_,        double(0.1));
+
 
     ROS_INFO("qnode init finished");
 
@@ -98,7 +98,7 @@ bool QNode::init() {
 void QNode::run() {
 
     log("Starting moving around");
-    update_navigator_action_(NAVIGATOR_MOVE);
+    update_navigator_action_(ranger_librarian::NavigatorAction::MOVE);
 
     //the same as ros::spin();
     while (ros::ok()) {
@@ -157,7 +157,6 @@ void QNode::rgb_callback(const sensor_msgs::ImageConstPtr &msg)
     }
 }
 
-
 void QNode::depth_low_action_callback(const std_msgs::String& msg) {
     if (DEBUG) {
         printf("depth_low_action msg received:  %s\n", msg.data.c_str());
@@ -173,7 +172,7 @@ void QNode::depth_low_action_callback(const std_msgs::String& msg) {
     if ( depth_low_action.compare("stop")==0 ) {
 
         read_label_ = true;
-        update_navigator_action_(NAVIGATOR_STOP);
+        update_navigator_action_(ranger_librarian::NavigatorAction::STOP);
         log("Trying to read label...");
 
         if (book_read_label()) {
@@ -189,38 +188,42 @@ void QNode::depth_low_action_callback(const std_msgs::String& msg) {
             log("Read label failed! Timeout...");
         }
         read_label_ = false;
-        update_navigator_action_(NAVIGATOR_MOVE);
+        update_navigator_action_(ranger_librarian::NavigatorAction::MOVE);
     }
 
 }
 
 void QNode::scale_callback(const std_msgs::Float64& msg) {
 
-    double weight_current = msg.data;
+    double weight_stable = msg.data;
 
     if (DEBUG) {
-        printf("Scale msg received:  %0.2f\n", weight_current);
+        printf("Scale msg received:  %0.2f\n", weight_stable);
     }
 
+    // control of max weight reached
     if (!weight_max_reached_ ) {
-        if (weight_current > weight_max_allowed_) {
+        if (weight_stable > weight_max_allowed_) {
             weight_max_reached_ = true;
             log("MAX WEIGHT reached! ");
-            update_navigator_action_(NAVIGATOR_FINISH);
+            // sleep for couple of seconds
+            ros::Duration(2).sleep();
+            update_navigator_action_(ranger_librarian::NavigatorAction::FINISH);
         }
 
     }
 
-    // implement control of max weight reached
+    // control of max weight reached
     if (weight_max_reached_) {
-        if( weight_current <= weight_empty_) {
+        if( weight_stable <= weight_empty_) {
             weight_max_reached_ = false;
-            log("Disloaded! ");
-            update_navigator_action_(NAVIGATOR_MOVE);
+            log("Disloaded! Going to move around");
+            // sleep for couple of seconds
+            ros::Duration(2).sleep();
+            update_navigator_action_(ranger_librarian::NavigatorAction::MOVE);
         }
     }
 }
-
 
 
 void QNode::scale_filtered_callback(const ranger_librarian::WeightFiltered& msg) {
@@ -247,6 +250,35 @@ void QNode::scale_filtered_callback(const ranger_librarian::WeightFiltered& msg)
     }
 
 }
+
+void QNode::battery_level_callback(const std_msgs::Float64& msg) {
+
+    double level_current = msg.data;
+
+    if (DEBUG) {
+        printf("Battery level msg received:  %0.2f\n", level_current);
+    }
+
+    if (!battery_low_reached_ ) {
+        if (level_current < battery_level_min_) {
+            battery_low_reached_ = true;
+            log("Battery level low! ");
+            update_navigator_action_(ranger_librarian::NavigatorAction::FINISH);
+        }
+    }
+
+    // implement control of max weight reached
+    if (battery_low_reached_) {
+        if( level_current >= 0.95) {
+            battery_low_reached_ = false;
+            log("Battery charged! Going to move around");
+            // sleep for couple of seconds
+            ros::Duration(2).sleep();
+            update_navigator_action_(ranger_librarian::NavigatorAction::MOVE);
+        }
+    }
+}
+
 /////////////////////////////////////////////////////////////////////
 // OTHER methods
 bool QNode::book_read_label() {
@@ -304,12 +336,12 @@ bool QNode::book_read_weight() {
     return book_added;
 }
 
-void QNode::update_navigator_action_(NavigatorAction action) {
-    action_current_ = action;
+void QNode::update_navigator_action_(int action) {
+    action_msg_current_.action = action;
 
-    ranger_librarian::NavigatorAction msg;
-    msg.action = action_current_;
-    pub_navigator_.publish(msg);
+    pub_navigator_.publish(action_msg_current_);
+    action_msg_last_ = action_msg_current_;
+
 
     Q_EMIT navigatorActionStringUpdated(); // used to signal the gui for a string change
 }

@@ -55,6 +55,8 @@ static const string SCALE_TOPIC = "/scale";
 static const string SCALE_FILTERED_TOPIC = "/scale_filtered";
 static const string DEPTH_LOW_DURATION_TOPIC = "/depth_below_timer/depth_low_duration";
 static const string DEPTH_BELOW_TIMER_TOPIC = "/depth_below_timer/depth_low_action";
+static const string BATTERY_LEVEL_TOPIC = "/battery_level";
+
 
 // node rate
 static const int NODE_RATE = 31;
@@ -88,7 +90,7 @@ public:
 
     // Logging
     QStringListModel* loggingModel() { return &logging_model; }
-    string navigatorActionString() { return NavigatorActionStrings[action_current_]; }
+    string navigatorActionString() { return NavigatorActionStrings[action_msg_current_.action]; }
     void log( const std::string &msg);
 
 Q_SIGNALS:
@@ -118,10 +120,14 @@ private:
     ros::Subscriber sub_depth_low_action_;
     ros::Subscriber sub_scale_;
     ros::Subscriber sub_scale_filtered_;
+    ros::Subscriber sub_battery_;
 
-    //  scale callback
+    // scale parameters
     double weight_max_allowed_;             // maximum weight allowed
     double weight_empty_;                   // weight measurement as empty;
+
+    // battery parameters
+    double battery_level_min_;              // battery low level
 
     // read label parameters
     double time_depth_low_read_;            // time (s) for depth val = 0 to start label read
@@ -139,14 +145,14 @@ private:
     bool read_label_;
     bool read_label_success_;
     bool weight_max_reached_;
-    bool battery_low_;
+    bool battery_low_reached_;
 
     // book struct object
     Book last_book_add_;
     ros::Time last_book_add_time_;
 
-    NavigatorAction action_last_;
-    NavigatorAction action_current_;
+    ranger_librarian::NavigatorAction action_msg_last_;
+    ranger_librarian::NavigatorAction action_msg_current_;
 
     // list of books
     std::vector<Book> book_list_;
@@ -154,16 +160,16 @@ private:
     // methods
     bool book_read_label();
     bool book_read_weight();
-    void update_navigator_action_(NavigatorAction action);
+    void update_navigator_action_(int action);
 
-public:
     // Callbacks
     void rgb_callback(const sensor_msgs::ImageConstPtr& msg);
-
     void depth_low_action_callback(const std_msgs::String& msg);
     void scale_callback(const std_msgs::Float64& msg);
     void scale_filtered_callback(const ranger_librarian::WeightFiltered& msg);
+    void battery_level_callback(const std_msgs::Float64& msg);
 
+public:
     QImage q_user_image_;
 };
 
