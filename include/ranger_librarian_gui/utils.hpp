@@ -13,28 +13,11 @@ struct Book {
     double weight;
 };
 
-// navigator ACTIONS
- enum NavigatorAction
-{
-    NAVIGATOR_STOP,
-    NAVIGATOR_MOVE,
-    NAVIGATOR_FINISH,
-    NAVIGATOR_BATTERYLOW
-};
 static const string NavigatorActionStrings[] =
 {
-    "STOP",
-    "MOVE",
-    "FINISH"
+    "I am stopped",
+    "I am just moving around..",
+    "Sorry, I am goint to service place"
 };
-
-// navigator ACTIONS
-enum DepthLowAction
-{
-    DEPTH_LOW_SLOW,
-    DEPTH_LOW_STOP,
-    DEPTH_LOW_STUCK
-};
-
 
 #endif // UTILS_H

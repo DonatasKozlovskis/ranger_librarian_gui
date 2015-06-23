@@ -26,7 +26,6 @@ find_library(Tesseract_LIBRARIES NAMES tesseract_full tesseract_api tesseract
 # Catkin
 ##############################################################################
 
-
 # qt_build provides the qt cmake glue, roscpp the comms for a default talker
 find_package(catkin REQUIRED COMPONENTS
         qt_build
@@ -92,12 +91,6 @@ include_directories(
 
 add_executable(ranger_librarian_gui ${QT_SOURCES} ${QT_RESOURCES_CPP} ${QT_FORMS_HPP} ${QT_MOC_HPP})
 target_link_libraries(ranger_librarian_gui ${QT_LIBRARIES} ${catkin_LIBRARIES} ${Tesseract_LIBRARIES})
-
-#add_executable( depth_below_timer src/depth_below_timer.cpp src/utils.cpp)
-#target_link_libraries( depth_below_timer ${catkin_LIBRARIES} )
-
-#add_executable( weight_change_monitor src/weight_change_monitor.cpp)
-#target_link_libraries( weight_change_monitor ${catkin_LIBRARIES} )
 
 
 install(
