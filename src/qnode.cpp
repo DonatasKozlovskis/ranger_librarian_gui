@@ -97,7 +97,7 @@ bool QNode::init() {
 
 void QNode::run() {
 
-    log("Starting moving around");
+    log("Started moving around");
     update_navigator_action_(ranger_librarian::NavigatorAction::MOVE);
 
     //the same as ros::spin();
